@@ -15,6 +15,11 @@ def is_index_finger_up(landmarks):
     # Index tip (8) higher than pip (6) in y (for upright hand)
     return landmarks[8].y < landmarks[6].y and abs(landmarks[8].x - landmarks[6].x) < 0.1
 
+# Helper to check if all fingers are folded (for pause)
+def is_hand_closed(landmarks):
+    # All fingertips below their PIP joints (y higher)
+    return all(landmarks[i].y > landmarks[i-2].y for i in [8, 12, 16, 20])
+
 # Initialize Pygame
 pygame.init()
 WIDTH, HEIGHT = 800, 600
@@ -86,7 +91,8 @@ while running:
                     running = False
         clock.tick(10)
         continue
-    elif game_state == 'paused':
+    # Show pause menu only when hand is closed (all fingers folded)
+    if game_state == 'paused' and frame_count > 0:
         draw_menu(paused=True)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -107,6 +113,7 @@ while running:
     results = hands.process(rgb)
     monkey_tip = None
     hand_pointing = False
+    hand_closed = False
     if results.multi_hand_landmarks:
         for hand_landmarks in results.multi_hand_landmarks:
             lm = hand_landmarks.landmark
@@ -115,8 +122,16 @@ while running:
             if is_index_finger_up(lm):
                 monkey_tip = (tip_x, tip_y)
                 hand_pointing = True
-    # Pause logic: only update game state if hand is pointing
-    if hand_pointing:
+            if is_hand_closed(lm):
+                hand_closed = True
+    # Pause logic: pause if hand is closed, resume if pointing
+    if game_state == 'running':
+        if hand_closed:
+            game_state = 'paused'
+    if game_state == 'paused':
+        if hand_pointing:
+            game_state = 'running'
+    if game_state == 'running':
         frame_count += 1
         # Spawn objects
         if frame_count % spawn_rate == 0:
@@ -126,9 +141,6 @@ while running:
             obj['y'] += object_speed
         # Remove off-screen objects
         objects = [obj for obj in objects if obj['y'] < HEIGHT+50 and not obj['caught']]
-    else:
-        if game_state == 'running':
-            game_state = 'paused'
     # Draw objects (always)
     for obj in objects:
         draw_object(obj)
