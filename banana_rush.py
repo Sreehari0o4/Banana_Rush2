@@ -37,6 +37,23 @@ spawn_rate = 30  # frames
 objects = []
 frame_count = 0
 
+# Game state
+game_state = 'menu'  # 'menu', 'running', 'paused', 'quit'
+
+def draw_menu(paused=False):
+    screen.fill((20, 40, 20))
+    title = font.render('Banana Rush', True, (255, 255, 0))
+    screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
+    if not paused:
+        start_text = font.render('S: Start Game', True, (255,255,255))
+        screen.blit(start_text, (WIDTH//2 - start_text.get_width()//2, 220))
+    else:
+        point_text = font.render('Point to continue', True, (200,255,200))
+        screen.blit(point_text, (WIDTH//2 - point_text.get_width()//2, 220))
+    quit_text = font.render('Q: Quit', True, (255,255,255))
+    screen.blit(quit_text, (WIDTH//2 - quit_text.get_width()//2, 270))
+    pygame.display.flip()
+
 # Webcam setup
 cap = cv2.VideoCapture(0)
 
@@ -57,6 +74,29 @@ hand_traj = []
 # Main game loop
 running = True
 while running:
+    if game_state == 'menu':
+        draw_menu(paused=False)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_s:
+                    game_state = 'running'
+                elif event.key == pygame.K_q:
+                    running = False
+        clock.tick(10)
+        continue
+    elif game_state == 'paused':
+        draw_menu(paused=True)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    running = False
+        clock.tick(10)
+        continue
+
     screen.fill(BG_COLOR)
     # Webcam frame
     ret, frame = cap.read()
@@ -86,6 +126,9 @@ while running:
             obj['y'] += object_speed
         # Remove off-screen objects
         objects = [obj for obj in objects if obj['y'] < HEIGHT+50 and not obj['caught']]
+    else:
+        if game_state == 'running':
+            game_state = 'paused'
     # Draw objects (always)
     for obj in objects:
         draw_object(obj)
