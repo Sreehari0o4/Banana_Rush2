@@ -79,31 +79,6 @@ hand_traj = []
 # Main game loop
 running = True
 while running:
-    if game_state == 'menu':
-        draw_menu(paused=False)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_s:
-                    game_state = 'running'
-                elif event.key == pygame.K_q:
-                    running = False
-        clock.tick(10)
-        continue
-    # Show pause menu only when hand is closed (all fingers folded)
-    if game_state == 'paused' and frame_count > 0:
-        draw_menu(paused=True)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q:
-                    running = False
-        clock.tick(10)
-        continue
-
-    screen.fill(BG_COLOR)
     # Webcam frame
     ret, frame = cap.read()
     if not ret:
@@ -124,13 +99,45 @@ while running:
                 hand_pointing = True
             if is_hand_closed(lm):
                 hand_closed = True
+
+    if game_state == 'menu':
+        draw_menu(paused=False)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_s:
+                    game_state = 'running'
+                elif event.key == pygame.K_q:
+                    running = False
+        clock.tick(10)
+        continue
+    # Pause logic: pause if hand is closed, resume if pointing and not closed
+    if game_state == 'running' and hand_closed:
+        game_state = 'paused'
+    elif game_state == 'paused' and hand_pointing and not hand_closed:
+        game_state = 'running'
+
+    # Show pause menu only when game is paused and hand is closed
+    if game_state == 'paused' and frame_count > 0 and hand_closed:
+        draw_menu(paused=True)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    running = False
+        clock.tick(10)
+        continue
+
+    screen.fill(BG_COLOR)
     # Pause logic: pause if hand is closed, resume if pointing
-    if game_state == 'running':
-        if hand_closed:
-            game_state = 'paused'
-    if game_state == 'paused':
-        if hand_pointing:
-            game_state = 'running'
+    # Pause if hand is closed, resume if pointing and not closed
+    if game_state == 'running' and hand_closed:
+        game_state = 'paused'
+    elif game_state == 'paused' and hand_pointing and not hand_closed:
+        game_state = 'running'
+
     if game_state == 'running':
         frame_count += 1
         # Spawn objects
