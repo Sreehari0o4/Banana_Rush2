@@ -12,12 +12,10 @@ hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
 
 # Helper to check if index finger is up (extended)
 def is_index_finger_up(landmarks):
-    # Index tip (8) higher than pip (6) in y (for upright hand)
     return landmarks[8].y < landmarks[6].y and abs(landmarks[8].x - landmarks[6].x) < 0.1
 
 # Helper to check if all fingers are folded (for pause)
 def is_hand_closed(landmarks):
-    # All fingertips below their PIP joints (y higher)
     return all(landmarks[i].y > landmarks[i-2].y for i in [8, 12, 16, 20])
 
 # Initialize Pygame
@@ -27,7 +25,7 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Banana Rush')
 clock = pygame.time.Clock()
 
-# Load assets (placeholder colors for now)
+# Load assets (placeholder colors)
 BANANA_COLOR = (255, 255, 0)
 COCONUT_COLOR = (139, 69, 19)
 BOMB_COLOR = (0, 0, 0)
@@ -38,32 +36,38 @@ font = pygame.font.SysFont('comicsans', 36)
 # Game variables
 score = 0
 object_speed = 3
-spawn_rate = 30  # frames
+spawn_rate = 30
 objects = []
 frame_count = 0
+lives = 3
+selected_difficulty = None
 
 # Game state
-game_state = 'menu'  # 'menu', 'running', 'paused', 'quit'
+game_state = 'menu'
 
 def draw_menu(paused=False):
     screen.fill((20, 40, 20))
     title = font.render('Banana Rush', True, (255, 255, 0))
-    screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
-    if not paused:
-        start_text = font.render('S: Start Game', True, (255,255,255))
-        screen.blit(start_text, (WIDTH//2 - start_text.get_width()//2, 220))
-    else:
-        point_text = font.render('Point to continue', True, (200,255,200))
-        screen.blit(point_text, (WIDTH//2 - point_text.get_width()//2, 220))
-    quit_text = font.render('Q: Quit', True, (255,255,255))
-    screen.blit(quit_text, (WIDTH//2 - quit_text.get_width()//2, 270))
+    screen.blit(title, (WIDTH//2 - title.get_width()//2, 60))
+
+    easy_text = font.render('1: Easy', True, (200, 255, 200))
+    screen.blit(easy_text, (WIDTH//2 - easy_text.get_width()//2, 150))
+    med_text = font.render('2: Medium', True, (255, 200, 200))
+    screen.blit(med_text, (WIDTH//2 - med_text.get_width()//2, 200))
+    hard_text = font.render('3: Hard', True, (255, 100, 100))
+    screen.blit(hard_text, (WIDTH//2 - hard_text.get_width()//2, 250))
+
+    if selected_difficulty:
+        start_text = font.render('S: Start Game', True, (255, 255, 255))
+        screen.blit(start_text, (WIDTH//2 - start_text.get_width()//2, 320))
+
+    quit_text = font.render('Q: Quit', True, (255, 255, 255))
+    screen.blit(quit_text, (WIDTH//2 - quit_text.get_width()//2, 380))
     pygame.display.flip()
 
-# Webcam setup
+# Webcam
 cap = cv2.VideoCapture(0)
 
-
-# Object class
 def random_object():
     kind = random.choices(['banana', 'coconut', 'bomb'], weights=[0.7, 0.2, 0.1])[0]
     x = random.randint(50, WIDTH-50)
@@ -75,11 +79,9 @@ def draw_object(obj):
     pygame.draw.circle(screen, color, (obj['x'], obj['y']), obj['radius'])
 
 hand_traj = []
-
-# Main game loop
 running = True
+
 while running:
-    # Webcam frame
     ret, frame = cap.read()
     if not ret:
         break
@@ -101,60 +103,55 @@ while running:
                 hand_closed = True
 
     if game_state == 'menu':
-        draw_menu(paused=False)
+        draw_menu()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_s:
+                if event.key == pygame.K_1:
+                    selected_difficulty = 'easy'
+                elif event.key == pygame.K_2:
+                    selected_difficulty = 'medium'
+                elif event.key == pygame.K_3:
+                    selected_difficulty = 'hard'
+                elif event.key == pygame.K_s and selected_difficulty:
                     game_state = 'running'
+                    score = 0
+                    lives = 3
+                    objects = []
+                    frame_count = 0
                 elif event.key == pygame.K_q:
                     running = False
         clock.tick(10)
         continue
-    # Pause logic: pause if hand is closed, resume if pointing and not closed
+
     if game_state == 'running' and hand_closed:
         game_state = 'paused'
     elif game_state == 'paused' and hand_pointing and not hand_closed:
         game_state = 'running'
 
-    # Show pause menu only when game is paused and hand is closed
-    if game_state == 'paused' and frame_count > 0 and hand_closed:
+    if game_state == 'paused':
         draw_menu(paused=True)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q:
-                    running = False
         clock.tick(10)
         continue
 
     screen.fill(BG_COLOR)
-    # Pause logic: pause if hand is closed, resume if pointing
-    # Pause if hand is closed, resume if pointing and not closed
-    if game_state == 'running' and hand_closed:
-        game_state = 'paused'
-    elif game_state == 'paused' and hand_pointing and not hand_closed:
-        game_state = 'running'
-
     if game_state == 'running':
         frame_count += 1
-        # Spawn objects
         if frame_count % spawn_rate == 0:
             objects.append(random_object())
-        # Move objects
         for obj in objects:
             obj['y'] += object_speed
-        # Remove off-screen objects
         objects = [obj for obj in objects if obj['y'] < HEIGHT+50 and not obj['caught']]
-    # Draw objects (always)
+
     for obj in objects:
         draw_object(obj)
-    # Draw monkey hand (red dot) and allow catching only if pointing
+
     if monkey_tip:
         pygame.draw.circle(screen, (255, 0, 0), monkey_tip, 15)
-        # Check for catching objects
         for obj in objects:
             if not obj['caught']:
                 dist = math.hypot(monkey_tip[0] - obj['x'], monkey_tip[1] - obj['y'])
@@ -162,21 +159,38 @@ while running:
                     obj['caught'] = True
                     if obj['kind'] == 'banana':
                         score += 1
-                    elif obj['kind'] == 'bomb':
-                        score = max(0, score-5)
                     elif obj['kind'] == 'coconut':
-                        score = max(0, score-2)
-    # Increase difficulty
-    if score and score % 10 == 0:
-        object_speed = 3 + score//10
-        spawn_rate = max(10, 30 - score//5)
-    # Draw score
-    score_text = font.render(f'Score: {score}', True, (255,255,255))
+                        if selected_difficulty == 'easy':
+                            score = max(0, score - 1)
+                        elif selected_difficulty == 'medium':
+                            lives -= 1
+                        else:  # hard
+                            lives = 0
+                    elif obj['kind'] == 'bomb':
+                        if selected_difficulty == 'easy':
+                            lives -= 1
+                        else:
+                            lives = 0
+
+    if selected_difficulty == 'hard':
+        for obj in objects:
+            if obj['kind'] == 'banana' and obj['y'] >= HEIGHT and not obj['caught']:
+                lives -= 1
+                obj['caught'] = True
+
+    score_text = font.render(f'Score: {score}', True, (255, 255, 255))
+    lives_text = font.render(f'Lives: {lives}', True, (255, 0, 0))
     screen.blit(score_text, (10, 10))
-    # Event handling
+    screen.blit(lives_text, (10, 50))
+
+    if lives <= 0:
+        game_state = 'menu'
+        selected_difficulty = None
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
     pygame.display.flip()
     clock.tick(30)
 
