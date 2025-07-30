@@ -249,7 +249,7 @@ def draw_object(obj):
         screen.blit(shadow_img, shadow_rect)
         screen.blit(rotated_img, img_rect)
         
-        # Add glint effect
+        # Add glint 
         if obj['rotation'] % 360 < 5:
             glint_pos = (int(obj['x'] - scaled_size//4), int(obj['y'] - scaled_size//4))
             pygame.draw.circle(screen, (255, 255, 255, 150), glint_pos, 5)
